@@ -5,7 +5,9 @@
 {-# LANGUAGE RecordWildCards #-}
 
 module Types.Escrow
-    ( generateEscrowFileString
+    ( Escrow(..)
+    , generateEscrowList
+    , generateEscrowFileString
     ) where
 
 import           Control.Monad       ((<=<))
@@ -25,6 +27,7 @@ import           Text.Read           (readMaybe)
 data Escrow = Escrow
   { address :: Text
   , assetRootAddress :: Text
+  , blockTimestamp :: Text
   , borrowedAmount :: Integer
   , borrower :: Text
   , borrowerCommonName :: Text
@@ -109,18 +112,19 @@ fileFooter = unlines
   , ""
   ]
 
-generateEscrowFileString :: [Value] -> String
-generateEscrowFileString values =
-  let escrowMap = foldr (\v m -> fromMaybe m $ do
+generateEscrowList :: [Value] -> [Maybe Escrow]
+generateEscrowList values =
+  map (\v -> do
         obj <- toObject v
         addr <- obj .!~ "address"
         let f a b = fromMaybe b $ do
               k <- readMaybe . T.unpack =<< a .!~ "key"
               v <- a .!~ "value"
               pure $ M.insert k v b
-        assets <- foldr f M.empty <$> (traverse toObject =<< toArray =<< obj !? fromText "BlockApps-Mercata-Escrow-assets")
-        escrow <- Escrow addr
+        let assets = foldr f M.empty <$> (traverse toObject =<< toArray =<< obj !? fromText "BlockApps-Mercata-Escrow-assets")
+        Escrow addr
                      <$> (obj .!~ "assetRootAddress")
+                     <*> (obj .!~ "block_timestamp")
                      <*> (obj .!# "borrowedAmount")
                      <*> (obj .!~ "borrower")
                      <*> (obj .!~ "borrowerCommonName")
@@ -133,9 +137,15 @@ generateEscrowFileString values =
                      <*> (obj .!# "totalCataReward")
                      <*> (Just $ fromMaybe 0 (obj .!# "liquidationAmount"))
                      <*> (Just $ fromMaybe "" (obj .!~ "version"))
-                     <*> pure assets
-        pure $ M.insert addr escrow m 
-        ) M.empty values
+                     <*> pure (fromMaybe M.empty assets)
+        ) values
+
+generateEscrowFileString :: [Value] -> String
+generateEscrowFileString values =
+  let escrowMap = foldr (\v m -> fromMaybe m $ do
+          escrow <- v
+          pure $ M.insert (address escrow) escrow m
+        ) M.empty $ generateEscrowList values
       linePrefixes = ("  [ ") : repeat ("  , ")
    in fileHeader
       ++ unlines (zipWith (++) linePrefixes $ printEscrow <$> M.elems escrowMap)

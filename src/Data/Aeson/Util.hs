@@ -32,6 +32,11 @@ toTextObject = traverse $ \case
   String t -> pure t
   _ -> Nothing
 
+(.!~~) :: Object -> Text -> Maybe String
+(.!~~) o field = o !? fromText field >>= \case
+  String t -> pure $ T.unpack t
+  _ -> Nothing
+
 (.!#) :: Object -> Text -> Maybe Integer
 (.!#) o field = o !? fromText field >>= \case
   String t -> readMaybe $ T.unpack t

@@ -147,13 +147,24 @@ generateAssetFileString assetValues =
             Nothing -> Just $ M.singleton root asset
             Just assetsByType -> Just $ M.alter (\case
               Nothing -> Just asset
-              Just a -> Just $ a{balances = M.alter (\case
-                Nothing -> Just bal
-                Just existingBalance -> Just $ existingBalance{
-                    address = if addr == root then root else address existingBalance,
-                    quantity = quantity existingBalance + q
-                  }
-                ) o (balances a)}
+              Just a -> Just $
+                if addr == root
+                  then
+                    asset{balances = M.alter (\case
+                      Nothing -> Just bal
+                      Just existingBalance -> Just $ existingBalance{
+                          address = root,
+                          quantity = quantity existingBalance + q
+                        }
+                      ) o (balances a)}
+                  else
+                    a{balances = M.alter (\case
+                      Nothing -> Just bal
+                      Just existingBalance -> Just $ existingBalance{
+                          address = address existingBalance,
+                          quantity = quantity existingBalance + q
+                        }
+                      ) o (balances a)}
               ) root assetsByType
             ) aType m
         ) M.empty assetValues
